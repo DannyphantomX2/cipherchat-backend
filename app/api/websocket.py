@@ -55,16 +55,16 @@ async def websocket_endpoint(
             data = await ws.receive_text()
             payload = json.loads(data)
 
-            # payload format: { "recipients": { "userId": { "ciphertext": "...", "iv": "..." } } }
-            # or for solo:    { "recipients": { "solo": { "ciphertext": "...", "iv": "none" } } }
             recipients_json = json.dumps(payload.get("recipients", {}))
+            reply_to_id = payload.get("reply_to_id", None)
 
             db = SessionLocal()
             try:
                 msg = Message(
                     room_id=room_id,
                     sender_id=user_id,
-                    recipients=recipients_json
+                    recipients=recipients_json,
+                    reply_to_id=reply_to_id
                 )
                 db.add(msg)
                 db.commit()
@@ -74,6 +74,7 @@ async def websocket_endpoint(
                     "room_id": msg.room_id,
                     "sender_id": msg.sender_id,
                     "recipients": payload.get("recipients", {}),
+                    "reply_to_id": msg.reply_to_id,
                     "created_at": msg.created_at.isoformat()
                 }
             finally:

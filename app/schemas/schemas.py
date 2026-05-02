@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 class RegisterRequest(BaseModel):
     username: str
@@ -41,6 +41,7 @@ class MessageResponse(BaseModel):
     room_id: int
     sender_id: int
     recipients: dict[str, Any]
+    reply_to_id: Optional[int] = None
     created_at: str
     model_config = {"from_attributes": True}
 

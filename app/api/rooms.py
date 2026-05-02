@@ -78,6 +78,7 @@ def get_messages(room_id: int, db: Session = Depends(get_db), current_user: User
             room_id=msg.room_id,
             sender_id=msg.sender_id,
             recipients=recipients,
+            reply_to_id=msg.reply_to_id,
             created_at=msg.created_at.isoformat()
         ))
     return result

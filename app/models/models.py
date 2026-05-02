@@ -11,7 +11,7 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     memberships: Mapped[list["RoomMember"]] = relationship("RoomMember", back_populates="user")
-    messages: Mapped[list["Message"]] = relationship("Message", back_populates="sender")
+    messages: Mapped[list["Message"]] = relationship("Message", back_populates="sender", foreign_keys="Message.sender_id")
 
 class Room(Base):
     __tablename__ = "rooms"
@@ -37,12 +37,11 @@ class Message(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     room_id: Mapped[int] = mapped_column(Integer, ForeignKey("rooms.id"), nullable=False)
     sender_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
-    # recipients is a JSON string: {"userId": {"ciphertext": "...", "iv": "..."}, ...}
-    # For solo messages (no peers), stores: {"solo": {"ciphertext": "...", "iv": "none"}}
     recipients: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    reply_to_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("messages.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     room: Mapped["Room"] = relationship("Room", back_populates="messages")
-    sender: Mapped["User"] = relationship("User", back_populates="messages")
+    sender: Mapped["User"] = relationship("User", back_populates="messages", foreign_keys=[sender_id])
 
 class RoomKey(Base):
     __tablename__ = "room_keys"
