@@ -1,9 +1,22 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.core.database import engine, Base
+from sqlalchemy import text
+from app.core.database import engine, Base, get_db
 from app.api import auth, rooms, websocket, keys
 
 Base.metadata.create_all(bind=engine)
+
+# Safe migration — adds reply_to_id if it doesn't exist
+def run_migrations():
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("ALTER TABLE messages ADD COLUMN reply_to_id INTEGER DEFAULT NULL"))
+            conn.commit()
+            print("Migration: added reply_to_id column")
+        except Exception:
+            pass  # Column already exists, that's fine
+
+run_migrations()
 
 app = FastAPI(title="CipherChat", version="1.0.0")
 
