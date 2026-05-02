@@ -1,10 +1,10 @@
+import json
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, status
 from sqlalchemy.orm import Session
 from app.core.database import SessionLocal
 from app.core.security import decode_access_token
 from app.models.models import RoomMember, Message
 from collections import defaultdict
-import json
 
 router = APIRouter()
 
@@ -20,9 +20,14 @@ class ConnectionManager:
         if ws in self.rooms[room_id]:
             self.rooms[room_id].remove(ws)
 
-    async def broadcast(self, room_id: int, message: dict):
+    async def broadcast(self, room_id: int, message: dict, exclude: WebSocket = None):
         for connection in self.rooms[room_id]:
-            await connection.send_text(json.dumps(message))
+            if connection is exclude:
+                continue
+            try:
+                await connection.send_text(json.dumps(message))
+            except Exception:
+                pass
 
 manager = ConnectionManager()
 
@@ -50,26 +55,36 @@ async def websocket_endpoint(
         db.close()
 
     await manager.connect(room_id, ws)
+
     try:
         while True:
             data = await ws.receive_text()
             payload = json.loads(data)
 
-            recipients_json = json.dumps(payload.get("recipients", {}))
-            reply_to_id = payload.get("reply_to_id", None)
+            # Typing indicator — broadcast to others only, not sender
+            if payload.get("type") == "typing":
+                await manager.broadcast(room_id, {
+                    "type": "typing",
+                    "username": payload.get("username", "Someone"),
+                    "user_id": user_id,
+                }, exclude=ws)
+                continue
 
+            # Regular message
+            recipients_json = json.dumps(payload.get("recipients", {}))
             db = SessionLocal()
             try:
                 msg = Message(
                     room_id=room_id,
                     sender_id=user_id,
                     recipients=recipients_json,
-                    reply_to_id=reply_to_id
+                    reply_to_id=payload.get("reply_to_id"),
                 )
                 db.add(msg)
                 db.commit()
                 db.refresh(msg)
                 out = {
+                    "type": "message",
                     "id": msg.id,
                     "room_id": msg.room_id,
                     "sender_id": msg.sender_id,
@@ -80,6 +95,7 @@ async def websocket_endpoint(
             finally:
                 db.close()
 
+            # Broadcast to ALL including sender so sender gets the real DB id back
             await manager.broadcast(room_id, out)
 
     except WebSocketDisconnect:
