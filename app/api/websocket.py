@@ -20,7 +20,14 @@ class ConnectionManager:
         if ws in self.rooms[room_id]:
             self.rooms[room_id].remove(ws)
 
-    async def broadcast(self, room_id: int, message: dict, exclude: WebSocket = None):
+    async def broadcast(self, room_id: int, message: dict):
+        for connection in self.rooms[room_id]:
+            try:
+                await connection.send_text(json.dumps(message))
+            except Exception:
+                pass
+
+    async def broadcast_others(self, room_id: int, message: dict, exclude: WebSocket):
         for connection in self.rooms[room_id]:
             if connection is exclude:
                 continue
@@ -63,14 +70,14 @@ async def websocket_endpoint(
 
             # Typing indicator — broadcast to others only, not sender
             if payload.get("type") == "typing":
-                await manager.broadcast(room_id, {
+                await manager.broadcast_others(room_id, {
                     "type": "typing",
                     "username": payload.get("username", "Someone"),
                     "user_id": user_id,
                 }, exclude=ws)
                 continue
 
-            # Regular message
+            # Regular message — save to DB and broadcast to EVERYONE
             recipients_json = json.dumps(payload.get("recipients", {}))
             db = SessionLocal()
             try:
@@ -95,7 +102,7 @@ async def websocket_endpoint(
             finally:
                 db.close()
 
-            # Broadcast to ALL including sender so sender gets the real DB id back
+            # Broadcast to ALL including sender
             await manager.broadcast(room_id, out)
 
     except WebSocketDisconnect:
